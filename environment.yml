@@ -1,0 +1,22 @@
+name: dcegm
+
+dependencies:
+  - python=3.7
+  - numpy
+  - pandas
+  - statsmodels
+  - pytest
+  - pytest-xdist
+  - scipy
+  - matplotlib
+  - flake8
+  - seaborn
+  - nb_conda
+  - pip:
+    - oyaml
+    - isort
+    - jupyterlab
+    - black
+    - pre-commit
+
+
