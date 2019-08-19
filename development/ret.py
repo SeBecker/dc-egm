@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.interpolate as scin
 
 # from numpy.matlib import *
 # from scipy.optimize import *
@@ -43,7 +44,7 @@ def income(it, shock, coeffs_age_poly):
     return w
 
 
-def budget(it, savings, shocks, working, ngridm, n_quad_points, r):
+def budget(it, savings, shocks, working, ngridm, n_quad_points, r, coeffs_age_poly):
     """Wealth, M_{t+1} in period t+1, where it == t
 
     Arguments
@@ -57,9 +58,9 @@ def budget(it, savings, shocks, working, ngridm, n_quad_points, r):
     next period wealths
     """
 
-    w1 = np.full((ngridm, n_quad_points), income(it + 1, shocks) * working).T + np.full(
-        (n_quad_points, ngridm), savings * (1 + r)
-    )
+    w1 = np.full(
+        (ngridm, n_quad_points), income(it + 1, shocks, coeffs_age_poly) * working
+    ).T + np.full((n_quad_points, ngridm), savings * (1 + r))
 
     return w1
 
@@ -77,9 +78,7 @@ def mbudget(ngridm, n_quad_points, r):
 # interpolate and extrapolate are potentially substitutable by the interpolate function below
 
 
-def value_function(working, it, x, value, beta):
-    """Value function calculation for the """
-
+def value_function(working, it, x, value, beta, theta, duw):
     x = x.flatten("F")
 
     res = np.full(x.shape, np.nan)
@@ -89,19 +88,17 @@ def value_function(working, it, x, value, beta):
     mask = x < value[1, 0, working, it]
 
     # Calculate t+1 value function in the constrained region
-    res[mask] = util(x[mask], working) + beta * value[0, 1, working, it]
+    res[mask] = util(x[mask], working, theta, duw) + beta * value[0, 1, working, it]
 
     # Calculate t+1 value function in non-constrained region
-    # interpolate
-    res[~mask] = np.interp(x[~mask], value[:, 0, working, it], value[:, 1, working, it])
-    # extrapolate
-    slope = (value[-2, 1, working, it] - value[-1, 1, working, it]) / (
-        value[-2, 0, working, it] - value[-1, 0, working, it]
+    # inter- and extrapolate
+    interpolation = scin.interp1d(
+        value[:, 0, working, it],
+        value[:, 1, working, it],
+        bounds_error=False,
+        fill_value="extrapolate",
     )
-    intercept = value[-1, 1, working, it] - value[-1, 0, working, it] * slope
-    res[res == np.max(value[:, 1, working, it])] = (
-        intercept + slope * x[res == np.max(value[:, 1, working, it])]
-    )
+    res[~mask] = interpolation(x[~mask])
 
     return res
 
