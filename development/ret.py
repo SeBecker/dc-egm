@@ -124,3 +124,104 @@ def logsum(x, lambda_):
     res = mx + lambda_ * np.log(np.sum(np.exp(mxx / lambda_), axis=0))
 
     return res
+
+
+def egm_step(
+    value,
+    policy,
+    savingsgrid,
+    quadstnorm,
+    period,
+    Tbar,
+    ngridm,
+    cfloor,
+    n_quad_points,
+    r,
+    coeffs_age_poly,
+    theta,
+    duw,
+    beta,
+    lambda_,
+    sigma,
+    quadw,
+):
+    """This function executes the EGM step of the algorithm."""
+
+    for choice in [0, 1]:
+        wk1 = budget(
+            period,
+            savingsgrid,
+            quadstnorm * sigma,
+            choice,
+            ngridm,
+            n_quad_points,
+            r,
+            coeffs_age_poly,
+        )
+
+        wk1[wk1 < cfloor] = cfloor
+
+        # Value function
+        vl1 = np.full((2, ngridm * n_quad_points), np.nan)
+
+        if period + 1 == Tbar - 1:
+            vl1[0, :] = util(wk1, 0, theta, duw).flatten("F")
+            vl1[1, :] = util(wk1, 1, theta, duw).flatten("F")
+        else:
+            vl1[1, :] = value_function(
+                1, period + 1, wk1, value, beta, theta, duw
+            )  # value function in t+1 if choice in t+1 is work
+            vl1[0, :] = value_function(0, period + 1, wk1, value, beta, theta, duw)
+
+            # Probability of choosing work in t+1
+        if choice == 0:
+            # Probability of choosing work in t+1
+            pr1 = np.full(2500, 0.00)
+        else:
+            pr1 = chpr(vl1, lambda_)
+
+        # Next period consumption based on interpolation and extrapolation
+        # given grid points and associated consumption
+        cons10_interpolate = scin.interp1d(
+            policy[:, 0, 0, period + 1],
+            policy[:, 1, 0, period + 1],
+            bounds_error=False,
+            fill_value="extrapolate",
+        )
+        cons10_flat = cons10_interpolate(wk1).flatten("F")
+
+        cons11_interpolate = scin.interp1d(
+            policy[:, 0, 1, period + 1],
+            policy[:, 1, 1, period + 1],
+            bounds_error=False,
+            fill_value="extrapolate",
+        )
+        # extrapolate linearly right of max grid point
+        cons11_flat = cons11_interpolate(wk1).flatten("F")
+
+        # Marginal utility of expected consumption next period
+        mu1 = pr1 * mutil(cons11_flat, theta) + (1 - pr1) * mutil(cons10_flat, theta)
+
+        # Marginal budget
+        # Note: Constant for this model formulation (1+r)
+        mwk1 = mbudget(ngridm, n_quad_points, r)
+
+        # RHS of Euler eq., p 337, integrate out error of y
+        rhs = np.dot(quadw.T, np.multiply(mu1.reshape(wk1.shape, order="F"), mwk1))
+        # Current period consumption from Euler equation
+
+        cons0 = imutil(beta * rhs, theta)
+        # Update containers related to consumption
+        policy[1:, 1, choice, period] = cons0
+        policy[1:, 0, choice, period] = savingsgrid + cons0
+
+        if choice == 1:
+            # Calculate continuation value
+            ev = np.dot(quadw.T, logsum(vl1, lambda_).reshape(wk1.shape, order="F"))
+        else:
+            ev = np.dot(quadw.T, vl1[0, :].reshape(wk1.shape, order="F"))
+        # Update value function related containers
+        value[1:, 1, choice, period] = util(cons0, choice, theta, duw) + beta * ev
+        value[1:, 0, choice, period] = savingsgrid + cons0
+        value[0, 1, choice, period] = ev[0]
+    return value
