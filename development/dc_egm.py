@@ -140,6 +140,7 @@ def upper_envelope(obj, fullinterval=False, intersection=False):
     # create upper envelope
     maxinterpolated = repmat(interpolated.max(axis=0), m=interpolated.shape[0], n=1)
     top = interpolated == maxinterpolated
+    top = top.astype(int)
 
     # Initialise container
     # result_upper = polyline(xx, maxinterpolated[1,:]) ## This does not seem to work as
@@ -154,9 +155,9 @@ def upper_envelope(obj, fullinterval=False, intersection=False):
 
     while_operator = True
     while while_operator:
-        k0 = np.where(top[:, 0] is True)[0][0]
+        k0 = np.where(top[:, 0] == 1)[0][0]
         for i in range(1, n):
-            k1 = np.where(top[:, i] is True)[0][0]
+            k1 = np.where(top[:, i] == 1)[0][0]
             if k1 != k0:
                 ln1 = k0
                 ln2 = k1
