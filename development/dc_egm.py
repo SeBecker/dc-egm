@@ -226,3 +226,46 @@ def upper_envelope(obj, fullinterval=False, intersection=False):
         ]  # Added line
 
     return result_upper, result_inter
+
+
+def secondary_envelope(obj):
+    result = []
+    newdots = []
+    index_removed = []
+
+    sect = []
+    cur = deepcopy(obj)
+    # Find discontinutiy
+    ii = cur[0][1:] > cur[0][:-1]
+    # Substitute for matlab while true loop
+    i = 1
+    while_operator = True
+    while while_operator:
+        j = np.where([ii[counter] != ii[0] for counter in range(len(ii))])[0]
+        if len(j) == 0:
+            if i > 1:
+                sect += [cur]
+            while_operator = False
+        else:
+            j = min(j)
+
+            sect_container, cur = chop(cur, j, True)
+            sect += [sect_container]
+            ii = ii[j:]
+            i += 1
+    # yes we can use np.sort instead of the pre-specified function from the upper
+    # envelope notebook
+    if len(sect) > 1:
+        sect = [np.sort(i) for i in sect]
+        result_container, newdots_container = upper_envelope(sect, True, True)
+        index_removed_container = diff(obj, result_container, 10)
+    else:
+        result_container = obj
+        index_removed_container = np.array([])
+        newdots_container = np.stack([np.array([]), np.array([])])
+
+    result += [result_container]
+    newdots += [newdots_container]
+    index_removed += [index_removed_container]
+
+    return np.array(result[0]), newdots[0], index_removed[0]
