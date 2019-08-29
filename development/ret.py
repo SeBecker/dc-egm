@@ -168,7 +168,6 @@ def egm_step(
     quadw,
 ):
     """This function executes the EGM step of the algorithm."""
-
     for choice in [0, 1]:
         wk1 = budget(
             period,
@@ -528,7 +527,7 @@ def secondary_envelope_wrapper(value, policy, period, theta, duw, beta, ev, ngri
         value_, newdots, del_index = secondary_envelope(value[period][1].T)
     else:
         x1 = np.linspace(minx, value[period][1].T[0][1], np.round(ngridm / 10))
-        y1 = util(x1, 1.0, theta, duw) + beta * ev[0]
+        y1 = util(x1, 1.0, theta, duw) + beta * ev[1]
         value_x = np.append(x1, value[period][1].T[0])
         value_y = np.append(y1, value[period][1].T[1])
         value_aux = np.stack([value_x, value_y])
