@@ -119,6 +119,7 @@ def value_function(working, it, x, value, beta, theta, duw):
         value[it][working][:, 1],
         bounds_error=False,
         fill_value="extrapolate",
+        kind='linear'
     )
     res[~mask] = interpolation(x[~mask])
 
@@ -181,7 +182,6 @@ def egm_step(
         )
 
         wk1[wk1 < cfloor] = cfloor
-
         # Value function
         vl1 = np.full((2, ngridm * n_quad_points), np.nan)
         if period + 1 == Tbar - 1:
@@ -202,24 +202,20 @@ def egm_step(
 
         # Next period consumption based on interpolation and extrapolation
         # given grid points and associated consumption
-        cons10_interpolate = scin.interp1d(
-            policy[period + 1][0][:, 0],
-            policy[period + 1][0][:, 1],
-            bounds_error=False,
-            fill_value="extrapolate",
-        )
-        cons10_flat = cons10_interpolate(wk1).flatten("F")
-
-        cons11_interpolate = scin.interp1d(
-            policy[period + 1][1][:, 0],
-            policy[period + 1][1][:, 1],
-            bounds_error=False,
-            fill_value="extrapolate",
-        )
+        cons10 = np.interp(wk1, policy[period + 1][0].T[0], policy[period + 1][0].T[1])
         # extrapolate linearly right of max grid point
-        cons11_flat = cons11_interpolate(wk1).flatten("F")
+        slope = (policy[period + 1][0].T[1][-2] - policy[period + 1][0].T[1][-1]) / (policy[period + 1][0].T[0][-2] - policy[period + 1][0].T[0][-1])
+        intercept = policy[period + 1][0].T[1][-1] - policy[period + 1][0].T[0][-1] * slope
+        cons10[cons10 == np.max(policy[period + 1][0].T[1])] = intercept + slope * wk1[cons10 == np.max(policy[period + 1][0].T[1])]
+        cons10_flat = cons10.flatten('F')
 
-        # Marginal utility of expected consumption next period
+        cons11 = np.interp(wk1, policy[period + 1][1].T[0], policy[period + 1][1].T[1])
+        # extrapolate linearly right of max grid point
+        slope = (policy[period + 1][1].T[1][-2] - policy[period + 1][1].T[1][-1]) / (policy[period + 1][1].T[0][-2] - policy[period + 1][1].T[0][-1])
+        intercept = policy[period + 1][1].T[1][-1] - policy[period + 1][1].T[0][-1] * slope
+        cons11[cons11 == np.max(policy[period + 1][1].T[1])] = intercept + slope * wk1[cons11 == np.max(policy[period + 1][1].T[1])]
+        cons11_flat = cons11.flatten('F')
+        #Marginal utility of expected consumption next period
         mu1 = pr1 * mutil(cons11_flat, theta) + (1 - pr1) * mutil(cons10_flat, theta)
 
         # Marginal budget
@@ -229,7 +225,6 @@ def egm_step(
         # RHS of Euler eq., p 337, integrate out error of y
         rhs = np.dot(quadw.T, np.multiply(mu1.reshape(wk1.shape, order="F"), mwk1))
         # Current period consumption from Euler equation
-
         cons0 = imutil(beta * rhs, theta)
         # Update containers related to consumption
         policy[period][choice][1:, 1] = cons0
@@ -240,7 +235,6 @@ def egm_step(
             ev = np.dot(quadw.T, logsum(vl1, lambda_).reshape(wk1.shape, order="F"))
         else:
             ev = np.dot(quadw.T, vl1[0, :].reshape(wk1.shape, order="F"))
-        # Update value function related containers
         value[period][choice][1:, 1] = util(cons0, choice, theta, duw) + beta * ev
         value[period][choice][1:, 0] = savingsgrid + cons0
         value[period][choice][0, 1] = ev[0]
@@ -351,7 +345,6 @@ def upper_envelope(obj, fullinterval=False, intersection=False):
 
     # copy original input
     aux_object = deepcopy(obj)
-
     # check length of polyline entries and drop polylines with x-length == 0
     for k1 in range(len(obj)):
         length += [(len(obj[k1][0]), len(obj[k1][1]))]
@@ -362,7 +355,6 @@ def upper_envelope(obj, fullinterval=False, intersection=False):
     for k1 in range(len(aux_object)):
         xx = np.append(xx, aux_object[k1][0].astype(list))
     xx = np.array([i for i in np.unique(xx)])
-
     # set up containers
     interpolated = np.empty((len(obj), len(xx)))
     extrapolated = np.empty((len(obj), len(xx)))
@@ -373,7 +365,6 @@ def upper_envelope(obj, fullinterval=False, intersection=False):
         interpolated[counter, :] = inter
         extrapolated[counter, :] = extra
     extrapolated = extrapolated.astype(bool)
-
     if not fullinterval:
         mask = np.sum(extrapolated, axis=0) > 0
         container = np.empty((interpolated.shape[0], int(mask.sum())))
@@ -390,7 +381,6 @@ def upper_envelope(obj, fullinterval=False, intersection=False):
     maxinterpolated = repmat(interpolated.max(axis=0), m=interpolated.shape[0], n=1)
     top = interpolated == maxinterpolated
     top = top.astype(int)
-
     # Initialise container
     # result_upper = polyline(xx, maxinterpolated[1,:]) ## This does not seem to work as
     #  intended
@@ -442,8 +432,8 @@ def upper_envelope(obj, fullinterval=False, intersection=False):
 
                         if intersection:
                             container1 = np.append(container1, [xx3])
-
                             container2 = np.append(container2, [xx3f])
+
                         if ln2 == k1:
 
                             while_operator = False
@@ -527,14 +517,18 @@ def secondary_envelope_wrapper(value, policy, period, theta, duw, beta, ev, ngri
         value_, newdots, del_index = secondary_envelope(value[period][1].T)
     else:
         x1 = np.linspace(minx, value[period][1].T[0][1], np.round(ngridm / 10))
-        y1 = util(x1, 1.0, theta, duw) + beta * ev[1]
-        value_x = np.append(x1, value[period][1].T[0])
-        value_y = np.append(y1, value[period][1].T[1])
+        x1 = x1[:-1]
+        y1 = util(x1, 1.0, theta, duw) + beta * ev[0]
+        value_x = np.append(x1, value[period][1].T[0][1:])
+        value_y = np.append(y1, value[period][1].T[1][1:])
         value_aux = np.stack([value_x, value_y])
-        policy_x = np.append(x1, policy[period][1].T[0])
-        policy_y = np.append(x1, policy[period][1].T[1])
-        policy[period][1] = np.stack([policy_x, policy_y]).T
+        policy_x = np.append(x1, policy[period][1].T[0][1:])
+        policy_y = np.append(x1, policy[period][1].T[1][1:])
+        policy[period][1] = deepcopy(np.stack([policy_x, policy_y]).T)
         value_, newdots, del_index = secondary_envelope(value_aux)
+        aux_array = np.zeros((2,1))
+        aux_array[1] = ev[0]
+        value_ = np.hstack([aux_array, value_])
     if len(del_index) > 0:
         new_policy = []
 
@@ -547,8 +541,8 @@ def secondary_envelope_wrapper(value, policy, period, theta, duw, beta, ev, ngri
                 ]
             )
             interpolation1 = scin.interp1d(
-                policy[period][1].T[0][j - 1 : j + 1],
-                policy[period][1].T[1][j - 1 : j + 1],
+                policy[period][1].T[0][j : j + 2],
+                policy[period][1].T[1][j : j + 2],
                 bounds_error=False,
                 fill_value="extrapolate",
             )
@@ -560,6 +554,7 @@ def secondary_envelope_wrapper(value, policy, period, theta, duw, beta, ev, ngri
                     if i not in del_index
                 ]
             )
+
             interpolation2 = scin.interp1d(
                 policy[period][1].T[0][j - 1 : j + 1],
                 policy[period][1].T[1][j - 1 : j + 1],
@@ -568,7 +563,6 @@ def secondary_envelope_wrapper(value, policy, period, theta, duw, beta, ev, ngri
             )
             point2 = interpolation2(newdots[0][counter])
             new_policy += [np.array([newdots[0][counter], point1, point2])]
-
         policy_x = np.array(
             [i for c, i in enumerate(policy[period][1].T[0]) if c not in del_index]
         )
@@ -578,12 +572,16 @@ def secondary_envelope_wrapper(value, policy, period, theta, duw, beta, ev, ngri
         for k in range(len(new_policy)):
             j = [i for i in np.where(policy_x > new_policy[k][0])[0]][0]
             policy_x = np.insert(policy_x, j, new_policy[k][0])
-            policy_x = np.insert(policy_x, j + 1, new_policy[k][0] - 1e3 * 2.2204e-16)
+            policy_x = np.insert(policy_x, j + 1, new_policy[k][0] - 0.001 * 2.2204e-16)
             policy_y = np.insert(policy_y, j, new_policy[k][1])
             policy_y = np.insert(policy_y, j + 1, new_policy[k][2])
-
         policy_ = np.stack([policy_x, policy_y]).T
+
     else:
         policy_ = policy[period][1]
+    if policy_[0][0] != 0.0:
+        aux_array = np.zeros((1,2))
+        policy_ = np.vstack([aux_array, policy_])
+
 
     return value_.T, policy_
