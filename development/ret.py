@@ -98,7 +98,8 @@ def mbudget(ngridm, n_quad_points, r):
 
 
 # Value function for worker
-# interpolate and extrapolate are potentially substitutable by the interpolate function below
+# interpolate and extrapolate are potentially substitutable by the interpolate function
+# below
 
 
 def value_function(working, it, x, value, beta, theta, duw):
@@ -119,7 +120,7 @@ def value_function(working, it, x, value, beta, theta, duw):
         value[it][working][:, 1],
         bounds_error=False,
         fill_value="extrapolate",
-        kind='linear'
+        kind="linear",
     )
     res[~mask] = interpolation(x[~mask])
 
@@ -204,18 +205,30 @@ def egm_step(
         # given grid points and associated consumption
         cons10 = np.interp(wk1, policy[period + 1][0].T[0], policy[period + 1][0].T[1])
         # extrapolate linearly right of max grid point
-        slope = (policy[period + 1][0].T[1][-2] - policy[period + 1][0].T[1][-1]) / (policy[period + 1][0].T[0][-2] - policy[period + 1][0].T[0][-1])
-        intercept = policy[period + 1][0].T[1][-1] - policy[period + 1][0].T[0][-1] * slope
-        cons10[cons10 == np.max(policy[period + 1][0].T[1])] = intercept + slope * wk1[cons10 == np.max(policy[period + 1][0].T[1])]
-        cons10_flat = cons10.flatten('F')
+        slope = (policy[period + 1][0].T[1][-2] - policy[period + 1][0].T[1][-1]) / (
+            policy[period + 1][0].T[0][-2] - policy[period + 1][0].T[0][-1]
+        )
+        intercept = (
+            policy[period + 1][0].T[1][-1] - policy[period + 1][0].T[0][-1] * slope
+        )
+        cons10[cons10 == np.max(policy[period + 1][0].T[1])] = (
+            intercept + slope * wk1[cons10 == np.max(policy[period + 1][0].T[1])]
+        )
+        cons10_flat = cons10.flatten("F")
 
         cons11 = np.interp(wk1, policy[period + 1][1].T[0], policy[period + 1][1].T[1])
         # extrapolate linearly right of max grid point
-        slope = (policy[period + 1][1].T[1][-2] - policy[period + 1][1].T[1][-1]) / (policy[period + 1][1].T[0][-2] - policy[period + 1][1].T[0][-1])
-        intercept = policy[period + 1][1].T[1][-1] - policy[period + 1][1].T[0][-1] * slope
-        cons11[cons11 == np.max(policy[period + 1][1].T[1])] = intercept + slope * wk1[cons11 == np.max(policy[period + 1][1].T[1])]
-        cons11_flat = cons11.flatten('F')
-        #Marginal utility of expected consumption next period
+        slope = (policy[period + 1][1].T[1][-2] - policy[period + 1][1].T[1][-1]) / (
+            policy[period + 1][1].T[0][-2] - policy[period + 1][1].T[0][-1]
+        )
+        intercept = (
+            policy[period + 1][1].T[1][-1] - policy[period + 1][1].T[0][-1] * slope
+        )
+        cons11[cons11 == np.max(policy[period + 1][1].T[1])] = (
+            intercept + slope * wk1[cons11 == np.max(policy[period + 1][1].T[1])]
+        )
+        cons11_flat = cons11.flatten("F")
+        # Marginal utility of expected consumption next period
         mu1 = pr1 * mutil(cons11_flat, theta) + (1 - pr1) * mutil(cons10_flat, theta)
 
         # Marginal budget
@@ -247,22 +260,6 @@ def egm_step(
             policy[period][choice] = policy_
 
     return value, policy
-
-
-def polyline(x, y=None, label=None):
-    """This function converts the """
-    # create output container
-    obj = np.empty((2, len(x)))
-
-    # condition output on the number on function inputs
-    if x is not None:
-        x = np.array(x).flatten()
-        obj[0, :] = x
-    if y is not None:
-        y = np.array(y).flatten()
-        obj[1, :] = y
-
-    return obj
 
 
 def diff(obj, pl2, significance=5):
@@ -526,7 +523,7 @@ def secondary_envelope_wrapper(value, policy, period, theta, duw, beta, ev, ngri
         policy_y = np.append(x1, policy[period][1].T[1][1:])
         policy[period][1] = deepcopy(np.stack([policy_x, policy_y]).T)
         value_, newdots, del_index = secondary_envelope(value_aux)
-        aux_array = np.zeros((2,1))
+        aux_array = np.zeros((2, 1))
         aux_array[1] = ev[0]
         value_ = np.hstack([aux_array, value_])
     if len(del_index) > 0:
@@ -580,8 +577,7 @@ def secondary_envelope_wrapper(value, policy, period, theta, duw, beta, ev, ngri
     else:
         policy_ = policy[period][1]
     if policy_[0][0] != 0.0:
-        aux_array = np.zeros((1,2))
+        aux_array = np.zeros((1, 2))
         policy_ = np.vstack([aux_array, policy_])
-
 
     return value_.T, policy_
