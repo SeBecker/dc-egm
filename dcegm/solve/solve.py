@@ -33,13 +33,15 @@ def solve_retirement_model(
     policy, value = create_container(
         num_grid, num_periods, savingsgrid, theta, cost_work
     )
-    #
+    # state = 0 retirement
+    # state = 1 worker
     for period in range(num_periods - 2, -1, -1):
-        for choice in [1, 0]:
+        # TODO: For state = 0, no need to solve egm.
+        for state in [1, 0]:
             value, policy, ev = egm_step(
                 value,
                 policy,
-                choice,
+                state,
                 savingsgrid,
                 quadstnorm,
                 period,
@@ -56,11 +58,11 @@ def solve_retirement_model(
                 sigma,
                 quadw,
             )
-            if choice == 1:
+            if state == 1:
                 value_, policy_ = secondary_envelope_wrapper(
                     value, policy, period, theta, cost_work, beta, ev, num_grid
                 )
-                value[period][choice] = value_
-                policy[period][choice] = policy_
+                value[period][state] = value_
+                policy[period][state] = policy_
 
     return value, policy

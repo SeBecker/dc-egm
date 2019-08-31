@@ -1,4 +1,5 @@
-"""This module contains some auxiliary methods for the solving process."""
+"""This module contains some auxiliary methods for the solving process. We should
+split this in several modules."""
 from copy import deepcopy
 
 import numpy as np
@@ -7,7 +8,7 @@ from numpy.matlib import repmat
 from scipy.optimize import brenth
 
 from dcegm.retirement.ret import budget
-from dcegm.retirement.ret import chpr
+from dcegm.retirement.ret import choice_probabilities
 from dcegm.retirement.ret import imutil
 from dcegm.retirement.ret import logsum
 from dcegm.retirement.ret import mbudget
@@ -23,11 +24,11 @@ def egm_step(
     savingsgrid,
     quadstnorm,
     period,
-    Tbar,
-    ngridm,
-    cfloor,
+    num_periods,
+    num_grid,
+    cons_floor,
     n_quad_points,
-    r,
+    interest,
     coeffs_age_poly,
     theta,
     duw,
@@ -37,94 +38,114 @@ def egm_step(
     quadw,
 ):
     """This function executes the EGM step of the algorithm."""
-    wk1 = budget(
+    wealth_t1 = budget(
         period,
         savingsgrid,
         quadstnorm * sigma,
         choice,
-        ngridm,
+        num_grid,
         n_quad_points,
-        r,
+        interest,
         coeffs_age_poly,
     )
 
-    wk1[wk1 < cfloor] = cfloor
+    wealth_t1[wealth_t1 < cons_floor] = cons_floor  # Replace with retirement saftey net
+    # TODO: Extract calculation of value function
     # Value function
-    vl1 = np.full((2, ngridm * n_quad_points), np.nan)
-    if period + 1 == Tbar - 1:
-        vl1[0, :] = util(wk1, 0, theta, duw).flatten("F")
-        vl1[1, :] = util(wk1, 1, theta, duw).flatten("F")
+    value_t1 = np.full((2, num_grid * n_quad_points), np.nan)
+    if period + 1 == num_periods - 1:
+        value_t1[0, :] = util(wealth_t1, 0, theta, duw).flatten("F")
+        value_t1[1, :] = util(wealth_t1, 1, theta, duw).flatten("F")
     else:
-        vl1[1, :] = value_function(
-            1, period + 1, wk1, value, beta, theta, duw
+        value_t1[1, :] = value_function(
+            1, period + 1, wealth_t1, value, beta, theta, duw
         )  # value function in t+1 if choice in t+1 is work
-        vl1[0, :] = value_function(0, period + 1, wk1, value, beta, theta, duw)
+        value_t1[0, :] = value_function(
+            0, period + 1, wealth_t1, value, beta, theta, duw
+        )
 
-        # Probability of choosing work in t+1
+    # TODO: Extract calculation of probabilities
+    # Probability of choosing work in t+1
     if choice == 0:
         # Probability of choosing work in t+1
-        pr1 = np.full(2500, 0.00)
+        choice_prob_t1 = np.full(n_quad_points * num_grid, 0.00)
     else:
-        pr1 = chpr(vl1, lambda_)
+        choice_prob_t1 = choice_probabilities(value_t1, lambda_)
 
+    # TODO: Extract consumption and produce one array with one dimension for choice
     # Next period consumption based on interpolation and extrapolation
     # given grid points and associated consumption
-    cons10 = np.interp(wk1, policy[period + 1][0].T[0], policy[period + 1][0].T[1])
+    cons10 = np.interp(
+        wealth_t1, policy[period + 1][0].T[0], policy[period + 1][0].T[1]
+    )
     # extrapolate linearly right of max grid point
     slope = (policy[period + 1][0].T[1][-2] - policy[period + 1][0].T[1][-1]) / (
         policy[period + 1][0].T[0][-2] - policy[period + 1][0].T[0][-1]
     )
     intercept = policy[period + 1][0].T[1][-1] - policy[period + 1][0].T[0][-1] * slope
     cons10[cons10 == np.max(policy[period + 1][0].T[1])] = (
-        intercept + slope * wk1[cons10 == np.max(policy[period + 1][0].T[1])]
+        intercept + slope * wealth_t1[cons10 == np.max(policy[period + 1][0].T[1])]
     )
     cons10_flat = cons10.flatten("F")
 
-    cons11 = np.interp(wk1, policy[period + 1][1].T[0], policy[period + 1][1].T[1])
+    cons11 = np.interp(
+        wealth_t1, policy[period + 1][1].T[0], policy[period + 1][1].T[1]
+    )
     # extrapolate linearly right of max grid point
     slope = (policy[period + 1][1].T[1][-2] - policy[period + 1][1].T[1][-1]) / (
         policy[period + 1][1].T[0][-2] - policy[period + 1][1].T[0][-1]
     )
     intercept = policy[period + 1][1].T[1][-1] - policy[period + 1][1].T[0][-1] * slope
     cons11[cons11 == np.max(policy[period + 1][1].T[1])] = (
-        intercept + slope * wk1[cons11 == np.max(policy[period + 1][1].T[1])]
+        intercept + slope * wealth_t1[cons11 == np.max(policy[period + 1][1].T[1])]
     )
     cons11_flat = cons11.flatten("F")
+
+    # TODO: Extract function for marginal utility
     # Marginal utility of expected consumption next period
-    mu1 = pr1 * mutil(cons11_flat, theta) + (1 - pr1) * mutil(cons10_flat, theta)
+    marg_ut_t1 = choice_prob_t1 * mutil(cons11_flat, theta) + (
+        1 - choice_prob_t1
+    ) * mutil(cons10_flat, theta)
 
     # Marginal budget
     # Note: Constant for this model formulation (1+r)
-    mwk1 = mbudget(ngridm, n_quad_points, r)
+    marg_bud_t1 = mbudget(num_grid, n_quad_points, interest)
 
     # RHS of Euler eq., p 337, integrate out error of y
-    rhs = np.dot(quadw.T, np.multiply(mu1.reshape(wk1.shape, order="F"), mwk1))
+    rhs_eul = np.dot(
+        quadw.T,
+        np.multiply(marg_ut_t1.reshape(wealth_t1.shape, order="F"), marg_bud_t1),
+    )
     # Current period consumption from Euler equation
-    cons0 = imutil(beta * rhs, theta)
+    cons_t0 = imutil(beta * rhs_eul, theta)
     # Update containers related to consumption
-    policy[period][choice][1:, 1] = cons0
-    policy[period][choice][1:, 0] = savingsgrid + cons0
+    policy[period][choice][1:, 1] = cons_t0
+    policy[period][choice][1:, 0] = savingsgrid + cons_t0
 
     if choice == 1:
         # Calculate continuation value
-        ev = np.dot(quadw.T, logsum(vl1, lambda_).reshape(wk1.shape, order="F"))
+        ev = np.dot(
+            quadw.T, logsum(value_t1, lambda_).reshape(wealth_t1.shape, order="F")
+        )
     else:
-        ev = np.dot(quadw.T, vl1[0, :].reshape(wk1.shape, order="F"))
+        ev = np.dot(quadw.T, value_t1[0, :].reshape(wealth_t1.shape, order="F"))
 
-    value[period][choice][1:, 1] = util(cons0, choice, theta, duw) + beta * ev
-    value[period][choice][1:, 0] = savingsgrid + cons0
+    value[period][choice][1:, 1] = util(cons_t0, choice, theta, duw) + beta * ev
+    value[period][choice][1:, 0] = savingsgrid + cons_t0
     value[period][choice][0, 1] = ev[0]
 
+    # Why is ev returned without?
     return value, policy, ev
 
 
-def secondary_envelope_wrapper(value, policy, period, theta, duw, beta, ev, ngridm):
+def secondary_envelope_wrapper(value, policy, period, theta, duw, beta, ev, num_grid):
     # get minimal x value
     minx = min(value[period][1].T[0][1:])
+    # Why not equality?
     if value[period][1].T[0][1] <= minx:
         value_, newdots, del_index = secondary_envelope(value[period][1].T)
     else:
-        x1 = np.linspace(minx, value[period][1].T[0][1], int(np.round(ngridm / 10)))
+        x1 = np.linspace(minx, value[period][1].T[0][1], int(np.round(num_grid / 10)))
         x1 = x1[:-1]
         y1 = util(x1, 1.0, theta, duw) + beta * ev[0]
         value_x = np.append(x1, value[period][1].T[0][1:])
@@ -194,39 +215,47 @@ def secondary_envelope_wrapper(value, policy, period, theta, duw, beta, ev, ngri
     return value_.T, policy_
 
 
-def secondary_envelope(obj):
+def secondary_envelope(values):
     result = []
     newdots = []
     index_removed = []
 
-    sect = []
-    cur = deepcopy(obj)
-    # Find discontinutiy
-    ii = cur[0][1:] > cur[0][:-1]
+    section = []
+    cur = deepcopy(values)
+    # Find discontinutiy, i.e. the following value smaller then the predecessor
+    discont_points = cur[0][1:] > cur[0][:-1]
     # Substitute for matlab while true loop
     i = 1
     while_operator = True
+    # TODO: Get more pythonic loop
+    # Algorithm 3, line 3+4
     while while_operator:
-        j = np.where([ii[counter] != ii[0] for counter in range(len(ii))])[0]
+        j = np.where(
+            [
+                discont_points[counter] != discont_points[0]
+                for counter in range(len(discont_points))
+            ]
+        )[0]
         if len(j) == 0:
             if i > 1:
-                sect += [cur]
+                section += [cur]
             while_operator = False
         else:
             j = min(j)
 
             sect_container, cur = chop(cur, j, True)
-            sect += [sect_container]
-            ii = ii[j:]
+            section += [sect_container]
+            discont_points = discont_points[j:]
             i += 1
     # yes we can use np.sort instead of the pre-specified function from the upper
     # envelope notebook
-    if len(sect) > 1:
-        sect = [np.sort(i) for i in sect]
-        result_container, newdots_container = upper_envelope(sect, True, True)
-        index_removed_container = diff(obj, result_container, 10)
+    # If we have more than one section, apply upper envelope
+    if len(section) > 1:
+        section = [np.sort(i) for i in section]
+        result_container, newdots_container = upper_envelope(section, True, True)
+        index_removed_container = diff(values, result_container, 10)
     else:
-        result_container = obj
+        result_container = values
         index_removed_container = np.array([])
         newdots_container = np.stack([np.array([]), np.array([])])
 
@@ -237,17 +266,17 @@ def secondary_envelope(obj):
     return np.array(result[0]), newdots[0], index_removed[0]
 
 
-def upper_envelope(obj, fullinterval=False, intersection=False):
+def upper_envelope(sections, fullinterval=False, intersection=False):
 
     # Assert if input of polyline objects is not an array (length==1)
-    assert len(obj) != 1, "Upper envelope is meant for an array of polylines"
+    assert len(sections) != 1, "Upper envelope is meant for an array of polylines"
     length = []
 
     # copy original input
-    aux_object = deepcopy(obj)
+    aux_object = deepcopy(sections)
     # check length of polyline entries and drop polylines with x-length == 0
-    for k1 in range(len(obj)):
-        length += [(len(obj[k1][0]), len(obj[k1][1]))]
+    for k1 in range(len(sections)):
+        length += [(len(sections[k1][0]), len(sections[k1][1]))]
         aux_object[k1] = [i for i in aux_object[k1] if len(i) != 0]
 
     # Get all unique values of x
@@ -256,12 +285,12 @@ def upper_envelope(obj, fullinterval=False, intersection=False):
         xx = np.append(xx, aux_object[k1][0].astype(list))
     xx = np.array([i for i in np.unique(xx)])
     # set up containers
-    interpolated = np.empty((len(obj), len(xx)))
-    extrapolated = np.empty((len(obj), len(xx)))
+    interpolated = np.empty((len(sections), len(xx)))
+    extrapolated = np.empty((len(sections), len(xx)))
 
     # interpolate for each unique value of x
-    for counter in range(len(obj)):
-        inter, extra = interpolate(xx, obj[counter])
+    for counter in range(len(sections)):
+        inter, extra = interpolate(xx, sections[counter])
         interpolated[counter, :] = inter
         extrapolated[counter, :] = extra
     extrapolated = extrapolated.astype(bool)
@@ -310,18 +339,18 @@ def upper_envelope(obj, fullinterval=False, intersection=False):
                     )
                     xx3f, _ = interpolate([xx3], aux_object[ln1])
                     # set up containers
-                    interpolated2 = np.empty((len(obj), 1))
-                    extrapolated2 = np.empty((len(obj), 1))
+                    interpolated2 = np.empty((len(sections), 1))
+                    extrapolated2 = np.empty((len(sections), 1))
 
                     # interpolate for each unique value of x
-                    for counter in range(len(obj)):
-                        inter2, extra2 = interpolate([xx3], obj[counter])
+                    for counter in range(len(sections)):
+                        inter2, extra2 = interpolate([xx3], sections[counter])
                         interpolated2[counter] = inter2
                         extrapolated2[counter] = extra2
 
                     extrapolated2 = extrapolated2.astype(bool)
                     interpolated2[extrapolated2] = -np.inf
-                    maxinterpolated2 = repmat(interpolated2.max(), m=len(obj), n=1)
+                    maxinterpolated2 = repmat(interpolated2.max(), m=len(sections), n=1)
                     ln3 = np.where(interpolated2 == maxinterpolated2)[0][0]
                     if (ln3 == ln1) | (ln3 == ln2):
 
@@ -350,7 +379,7 @@ def upper_envelope(obj, fullinterval=False, intersection=False):
             # This was missing before!!!! : replicates MatLab lines 342-346 which are
             # extremely important
             # Add point to container if it is on the currently highest line
-            if any(abs(obj[k1][0] - xx[i]) < 2.2204e-16) is True:
+            if any(abs(sections[k1][0] - xx[i]) < 2.2204e-16) is True:
                 result_upper_cont_x.append(xx[i])
                 result_upper_cont_y.append(maxinterpolated[0, i])
 
