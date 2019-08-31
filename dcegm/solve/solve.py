@@ -8,18 +8,18 @@ from dcegm.solve.solve_auxiliary import egm_step
 from dcegm.solve.solve_auxiliary import secondary_envelope_wrapper
 
 
-def solve_retirmenet_model(
-    ngridm,
+def solve_retirement_model(
+    num_grid,
     n_quad_points,
     r,
     coeffs_age_poly,
     theta,
-    duw,
+    cost_work,
     beta,
     lambda_,
     sigma,
     mmax,
-    Tbar,
+    num_periods,
     cfloor=0.001,
 ):
     # Initialize grids
@@ -27,13 +27,14 @@ def solve_retirmenet_model(
     quadw = ps_roots(n_quad_points)[1]
 
     # define savingsgrid
-    savingsgrid = np.linspace(0, mmax, ngridm)
+    savingsgrid = np.linspace(0, mmax, num_grid)
 
     # Set up list containers
-    policy, value = create_container()
+    policy, value = create_container(
+        num_grid, num_periods, savingsgrid, theta, cost_work
+    )
     #
-
-    for period in range(Tbar, -1, -1):
+    for period in range(num_periods - 2, -1, -1):
         for choice in [1, 0]:
             value, policy, ev = egm_step(
                 value,
@@ -42,14 +43,14 @@ def solve_retirmenet_model(
                 savingsgrid,
                 quadstnorm,
                 period,
-                Tbar,
-                ngridm,
+                num_periods,
+                num_grid,
                 cfloor,
                 n_quad_points,
                 r,
                 coeffs_age_poly,
                 theta,
-                duw,
+                cost_work,
                 beta,
                 lambda_,
                 sigma,
@@ -57,7 +58,7 @@ def solve_retirmenet_model(
             )
             if choice == 1:
                 value_, policy_ = secondary_envelope_wrapper(
-                    value, policy, period, theta, duw, beta, ev, ngridm
+                    value, policy, period, theta, cost_work, beta, ev, num_grid
                 )
                 value[period][choice] = value_
                 policy[period][choice] = policy_
