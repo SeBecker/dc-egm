@@ -68,26 +68,6 @@ def budget(it, savings, shocks, working, ngridm, n_quad_points, r, coeffs_age_po
     return w1
 
 
-def budget_old(it, savings, shocks, working, ngridm, expn, r, coeffs_age_poly):
-    """Wealth, M_{t+1} in period t+1, where it == t
-
-    Arguments
-    ---------
-        savings: np.array of savings with length ngridm
-        shocks: np.array of shocks with length expn
-
-    Returns
-    -------
-        w1: matrix with dimension (expn, ngridm) of all possible
-    next period wealths
-    """
-    w1 = np.full(
-        (ngridm, expn), income(it, shocks, coeffs_age_poly) * working
-    ).T + np.full((expn, ngridm), savings * (1 + r))
-
-    return w1
-
-
 def mbudget(ngridm, n_quad_points, r):
     """Marginal budget:
     Derivative of budget with respect to savings"""
