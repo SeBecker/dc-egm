@@ -1,32 +1,9 @@
 from copy import deepcopy
 
 import numpy as np
+import scipy.interpolate as scin
 from numpy.matlib import repmat
-from scipy.interpolate import InterpolatedUnivariateSpline
 from scipy.optimize import brenth
-
-
-# Chop used in while loop below
-# Does not work in original version - look at commented out and changes lines!
-def chop(obj, j, repeat=None):
-
-    # for k in range(len(obj)):
-    for k in range(1):
-        # if j > len(obj[k]):
-        # j = len(obj[k])
-        # result_1 = polyline(obj[k][0][:j], obj[k][1][:j])
-        result_1 = polyline(obj[0][: j + 1], obj[1][: j + 1])
-        result_2 = []
-
-        if repeat is not None:
-            if repeat:
-                # result_2 = polyline(obj[k][0][j:], obj[k][1][j:])
-                result_2 = polyline(obj[0][j:], obj[1][j:])
-            else:
-                # result_2 = polyline(obj[k][0][j+1:], obj[k][0][j+1:])
-                result_2 = polyline(obj[0][j + 1 :], obj[0][j + 1 :])
-
-    return result_1, result_2
 
 
 def polyline(x, y=None, label=None):
@@ -45,7 +22,19 @@ def polyline(x, y=None, label=None):
     return obj
 
 
-# aux_function used in upper_evelope below
+def diff(obj, pl2, significance=5):
+    x1 = np.round(pl2[0] * (10 ** significance)) * (10 ** (-significance))
+    y1 = np.round(pl2[1] * (10 ** significance)) * (10 ** (-significance))
+    x = np.round(obj[0] * (10 ** significance)) * (10 ** (-significance))
+    y = np.round(obj[1] * (10 ** significance)) * (10 ** (-significance))
+    indx = list(
+        set(
+            [np.where(x == i)[0][0] for i in np.setdiff1d(x, x1)]
+            + [np.where(y == i)[0][0] for i in np.setdiff1d(y, y1)]
+        )
+    )
+
+    return np.array(indx)
 
 
 def aux_function(x, obj1, obj2):
@@ -54,10 +43,12 @@ def aux_function(x, obj1, obj2):
     return value
 
 
-# interpolate used in upper_evelope below
 def interpolate(xx, obj, one=False):
+    """Interpolation function"""
     if not one:
-        interpolation = InterpolatedUnivariateSpline(obj[0], obj[1], k=1)
+        interpolation = scin.interp1d(
+            obj[0], obj[1], bounds_error=False, fill_value="extrapolate"
+        )
         container = interpolation(xx)
         extrapolate = [
             True if (i > max(obj[0])) | (i < min(obj[0])) else False for i in xx
@@ -67,7 +58,9 @@ def interpolate(xx, obj, one=False):
         extrapolate = []
 
         for poly in obj:
-            interpolation = InterpolatedUnivariateSpline(poly[0], poly[1], k=1)
+            interpolation = scin.interp1d(
+                poly[0], poly[1], bounds_error=False, fill_value="extrapolate"
+            )
             container += [interpolation(xx)]
             extrapolate += [
                 np.array(
@@ -78,6 +71,25 @@ def interpolate(xx, obj, one=False):
                 )
             ]
     return container, extrapolate
+
+
+def chop(obj, j, repeat=None):
+    """This function separates the grid into 1,..,j and j+1,...N parts."""
+    for k in range(1):
+        if j > len(obj[k]):
+            j = len(obj[k])
+        part1 = np.stack([obj[0][: j + 1], obj[1][: j + 1]])
+
+        if repeat is not None:
+            # If repeat == True the boundary points are included in both arrays
+            if repeat:
+                part2 = np.stack([obj[0][j:], obj[1][j:]])
+            else:
+                part2 = np.stack([obj[0][j + 1 :], obj[1][j + 1 :]])
+        if repeat is None:
+            part2 = np.array([])
+
+    return part1, part2
 
 
 # Upper envelope changed compared to original
@@ -128,10 +140,11 @@ def upper_envelope(obj, fullinterval=False, intersection=False):
     # create upper envelope
     maxinterpolated = repmat(interpolated.max(axis=0), m=interpolated.shape[0], n=1)
     top = interpolated == maxinterpolated
+    top = top.astype(int)
 
     # Initialise container
-    # The commented-out line for result_upper does not seem to work as intended
-    # result_upper = polyline(xx, maxinterpolated[1,:])
+    # result_upper = polyline(xx, maxinterpolated[1,:]) ## This does not seem to work as
+    #  intended
     result_inter = np.empty((2, 0))
     container1 = np.array([])
     container2 = np.array([])
@@ -140,11 +153,11 @@ def upper_envelope(obj, fullinterval=False, intersection=False):
     result_upper_cont_x = [xx[0]]  # Added line
     result_upper_cont_y = [interpolated[0, 0]]  # Added line
 
-    test = True
-    if test:
-        k0 = np.where(top[:, 0])[0][0]
+    while_operator = True
+    while while_operator:
+        k0 = np.where(top[:, 0] == 1)[0][0]
         for i in range(1, n):
-            k1 = np.where(top[:, i])[0][0]
+            k1 = np.where(top[:, i] == 1)[0][0]
             if k1 != k0:
                 ln1 = k0
                 ln2 = k1
@@ -152,7 +165,7 @@ def upper_envelope(obj, fullinterval=False, intersection=False):
                 xx2 = xx[i]
                 y1, extr1 = interpolate([xx1, xx2], aux_object[ln1])
                 y2, extr2 = interpolate([xx1, xx2], aux_object[ln2])
-                if all(~np.stack([extr1, extr2])) & all(abs(y1 - y2) > 0):
+                if np.all(~np.stack([extr1, extr2])) & np.all(abs(y1 - y2) > 0):
                     xx3 = brenth(
                         aux_function, xx1, xx2, args=(aux_object[ln1], aux_object[ln2])
                     )
@@ -184,7 +197,7 @@ def upper_envelope(obj, fullinterval=False, intersection=False):
                             container2 = np.append(container2, [xx3f])
                         if ln2 == k1:
 
-                            pass
+                            while_operator = False
 
                         else:
                             ln1 = ln2
@@ -195,9 +208,10 @@ def upper_envelope(obj, fullinterval=False, intersection=False):
                         ln2 = ln3
                         xx2 = xx3
 
-            # This replicates MatLab lines 342-346 which are extremely important
+            # This was missing before!!!! : replicates MatLab lines 342-346 which are
+            # extremely important
             # Add point to container if it is on the currently highest line
-            if any(abs(obj[k1][0] - xx[i]) < 2.2204e-16):
+            if any(abs(obj[k1][0] - xx[i]) < 2.2204e-16) is True:
                 result_upper_cont_x.append(xx[i])
                 result_upper_cont_y.append(maxinterpolated[0, i])
 
@@ -212,3 +226,46 @@ def upper_envelope(obj, fullinterval=False, intersection=False):
         ]  # Added line
 
     return result_upper, result_inter
+
+
+def secondary_envelope(obj):
+    result = []
+    newdots = []
+    index_removed = []
+
+    sect = []
+    cur = deepcopy(obj)
+    # Find discontinutiy
+    ii = cur[0][1:] > cur[0][:-1]
+    # Substitute for matlab while true loop
+    i = 1
+    while_operator = True
+    while while_operator:
+        j = np.where([ii[counter] != ii[0] for counter in range(len(ii))])[0]
+        if len(j) == 0:
+            if i > 1:
+                sect += [cur]
+            while_operator = False
+        else:
+            j = min(j)
+
+            sect_container, cur = chop(cur, j, True)
+            sect += [sect_container]
+            ii = ii[j:]
+            i += 1
+    # yes we can use np.sort instead of the pre-specified function from the upper
+    # envelope notebook
+    if len(sect) > 1:
+        sect = [np.sort(i) for i in sect]
+        result_container, newdots_container = upper_envelope(sect, True, True)
+        index_removed_container = diff(obj, result_container, 10)
+    else:
+        result_container = obj
+        index_removed_container = np.array([])
+        newdots_container = np.stack([np.array([]), np.array([])])
+
+    result += [result_container]
+    newdots += [newdots_container]
+    index_removed += [index_removed_container]
+
+    return np.array(result[0]), newdots[0], index_removed[0]

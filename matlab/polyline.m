@@ -8,7 +8,7 @@ classdef polyline
 % Objects of this class can be put in arrays and manipulated in bulk
 % Methods: len() to return the number of points
 %					 sort() to sort the points
-%					 interpolate() to compute the function 
+%					 interpolate() to compute the function
 %					 upper_envelope() to find upper envelope of a set of lines
 %					 inset() to insert a new point
 %					 chop() to break one line into two
@@ -249,7 +249,7 @@ methods
 			res2=reshape(res2,size(obj)); %return same shape
 		end
 	end
-	%----------------------------------------------	
+	%----------------------------------------------
 	function [res intersections]=upper_envelope(obj,fullinterval)
 		%This function computes the upper envelop over the array of polylines
 		%It assumes that all grids are sorted or should be sorted, and treats them as sorted
@@ -269,7 +269,7 @@ methods
 		pt=sort(unique([obj.x]));%collect all the x points in sorted row vector
 		%interpolate all lines on all points recording the extrapolation cases
 		[intr extr]=obj.interpolate(pt);
-		if ~fullinterval		
+		if ~fullinterval
 			%disregard points where at least one line is extrapolated
 			mask=sum(extr,1)>0;
 			intr(:,mask)=[];
@@ -302,7 +302,7 @@ methods
 				%check that neither is extrapolated in both points,
 				%and that intersection point is inside the interval <= func values are different at the borders
 				if all(~[extr1 extr2]) & all(abs(y1-y2)>0)
-					%find the intersection point or points 
+					%find the intersection point or points
 					while true
 						pt3=fzero(@(x) obj(ln2).interpolate(x)-obj(ln1).interpolate(x),[pt1 pt2]);
 						pt3f=obj(ln1).interpolate(pt3);
@@ -347,12 +347,10 @@ methods
 			k0=k1;%next step
 		end
 	end
-	%----------------------------------------------	
+	%----------------------------------------------
 	function [res indxremoved newdots]=secondary_envelope(obj)
 		%this function computes the secondary envelope of the polyline
-		%returns cleaned polylines, indexes of removed points and new points as a polyline
-		%in case of many polylines, clean up each
-		%indxremoved is cell array when obj has many elements
+%indxremoved is cell array when obj has many elements
 		for k=1:numel(obj)
 			cur=obj(k);%current line
 			%identify the loop-back regions
@@ -385,7 +383,7 @@ methods
 				indxremoved{k}=[];
 				newdots(k)=polyline;
 			end
-		end %next k 
+		end %next k
 		%return in same dimensions
 		res=reshape(res,size(obj));
 		indxremoved=reshape(indxremoved,size(obj));
