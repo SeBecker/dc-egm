@@ -3,6 +3,7 @@ import numpy as np
 import scipy.stats as scps
 from scipy.special.orthogonal import ps_roots
 
+from dcegm.solve.solve_auxiliary import create_container
 from dcegm.solve.solve_auxiliary import egm_step
 from dcegm.solve.solve_auxiliary import secondary_envelope_wrapper
 
@@ -17,7 +18,6 @@ def solve_retirmenet_model(
     beta,
     lambda_,
     sigma,
-    quadw,
     mmax,
     Tbar,
     cfloor=0.001,
@@ -30,9 +30,7 @@ def solve_retirmenet_model(
     savingsgrid = np.linspace(0, mmax, ngridm)
 
     # Set up list containers
-    value = []
-    policy = []
-
+    policy, value = create_container()
     #
 
     for period in range(Tbar, -1, -1):
