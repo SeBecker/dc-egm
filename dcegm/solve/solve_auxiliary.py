@@ -124,7 +124,7 @@ def secondary_envelope_wrapper(value, policy, period, theta, duw, beta, ev, ngri
     if value[period][1].T[0][1] <= minx:
         value_, newdots, del_index = secondary_envelope(value[period][1].T)
     else:
-        x1 = np.linspace(minx, value[period][1].T[0][1], np.round(ngridm / 10))
+        x1 = np.linspace(minx, value[period][1].T[0][1], int(np.round(ngridm / 10)))
         x1 = x1[:-1]
         y1 = util(x1, 1.0, theta, duw) + beta * ev[0]
         value_x = np.append(x1, value[period][1].T[0][1:])
