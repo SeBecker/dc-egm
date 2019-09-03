@@ -68,19 +68,13 @@ def egm_step(
     policy[period][choice][1:, 1] = cons_t0
     policy[period][choice][1:, 0] = savingsgrid + cons_t0
 
-    if choice == 1:
-        # Calculate continuation value
-        ev = np.dot(
-            quadw.T, logsum(value_t1, lambda_).reshape(wealth_t1.shape, order="F")
-        )
-    else:
-        ev = np.dot(quadw.T, value_t1[0, :].reshape(wealth_t1.shape, order="F"))
+    ev = expected_value(choice, value_t1, quadw, lambda_, wealth_t1)
 
     value[period][choice][1:, 1] = util(cons_t0, choice, theta, cost_work) + beta * ev
     value[period][choice][1:, 0] = savingsgrid + cons_t0
     value[period][choice][0, 1] = ev[0]
 
-    # Why is ev returned without?
+    # Why is ev returned without beta?
     return value, policy, ev
 
 
@@ -147,3 +141,13 @@ def next_period_marg_ut(choice, value_t1, wealth_t1, lambda_, policy, period, th
     return choice_prob_t1 * mutil(cons_t1[1, :], theta) + (1 - choice_prob_t1) * mutil(
         cons_t1[0, :], theta
     )
+
+
+def expected_value(choice, value_t1, quadw, lambda_, wealth_t1):
+    if choice == 1:
+        # Calculate continuation value
+        return np.dot(
+            quadw.T, logsum(value_t1, lambda_).reshape(wealth_t1.shape, order="F")
+        )
+    else:
+        return np.dot(quadw.T, value_t1[0, :].reshape(wealth_t1.shape, order="F"))
