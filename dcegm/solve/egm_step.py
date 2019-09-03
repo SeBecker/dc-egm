@@ -45,56 +45,22 @@ def egm_step(
     wealth_t1[wealth_t1 < cons_floor] = cons_floor  # Replace with retirement saftey net
     # Value function
     value_t1 = next_period_value(
-        value,
-        wealth_t1,
-        num_grid,
-        cost_work,
-        n_quad_points,
-        period,
-        num_periods,
-        theta,
-        beta,
+        value, wealth_t1, cost_work, period, num_periods, theta, beta
     )
-    # TODO: Extract calculation of probabilities
     # Probability of choosing work in t+1
-    choice_prob_t1 = calc_choice_probs(
+    choice_prob_t1 = next_period_choice_probs(
         choice, value_t1, lambda_, n_quad_points, num_grid
     )
 
-    # TODO: Extract consumption and produce one array with one dimension for choice
     # Next period consumption based on interpolation and extrapolation
     # given grid points and associated consumption
-    cons10 = np.interp(
-        wealth_t1, policy[period + 1][0].T[0], policy[period + 1][0].T[1]
-    )
-    # extrapolate linearly right of max grid point
-    slope = (policy[period + 1][0].T[1][-2] - policy[period + 1][0].T[1][-1]) / (
-        policy[period + 1][0].T[0][-2] - policy[period + 1][0].T[0][-1]
-    )
-    intercept = policy[period + 1][0].T[1][-1] - policy[period + 1][0].T[0][-1] * slope
-    cons10[cons10 == np.max(policy[period + 1][0].T[1])] = (
-        intercept + slope * wealth_t1[cons10 == np.max(policy[period + 1][0].T[1])]
-    )
-    cons10_flat = cons10.flatten("F")
-
-    cons11 = np.interp(
-        wealth_t1, policy[period + 1][1].T[0], policy[period + 1][1].T[1]
-    )
-    # extrapolate linearly right of max grid point
-    slope = (policy[period + 1][1].T[1][-2] - policy[period + 1][1].T[1][-1]) / (
-        policy[period + 1][1].T[0][-2] - policy[period + 1][1].T[0][-1]
-    )
-    intercept = policy[period + 1][1].T[1][-1] - policy[period + 1][1].T[0][-1] * slope
-    cons11[cons11 == np.max(policy[period + 1][1].T[1])] = (
-        intercept + slope * wealth_t1[cons11 == np.max(policy[period + 1][1].T[1])]
-    )
-    cons11_flat = cons11.flatten("F")
+    cons_t1 = next_period_consumption(policy, period, wealth_t1)
 
     # TODO: Extract function for marginal utility
     # Marginal utility of expected consumption next period
-    marg_ut_t1 = choice_prob_t1 * mutil(cons11_flat, theta) + (
+    marg_ut_t1 = choice_prob_t1 * mutil(cons_t1[1, :], theta) + (
         1 - choice_prob_t1
-    ) * mutil(cons10_flat, theta)
+    ) * mutil(cons_t1[0, :], theta)
 
     # Marginal budget
     # Note: Constant for this model formulation (1+r)
@@ -127,10 +93,8 @@ def egm_step(
     return value, policy, ev
 
 
-def next_period_value(
-    value, wealth, num_grid, cost_work, n_quad_points, period, num_periods, theta, beta
-):
-    value_t1 = np.full((2, num_grid * n_quad_points), np.nan)
+def next_period_value(value, wealth, cost_work, period, num_periods, theta, beta):
+    value_t1 = np.full((2, wealth.shape[0] * wealth.shape[1]), np.nan)
     if period + 1 == num_periods - 1:
         value_t1[0, :] = util(wealth, 0, theta, cost_work).flatten("F")
         value_t1[1, :] = util(wealth, 1, theta, cost_work).flatten("F")
@@ -144,10 +108,36 @@ def next_period_value(
     return value_t1
 
 
-def calc_choice_probs(choice, value, lambda_, n_quad_points, num_grid):
+def next_period_choice_probs(choice, value, lambda_, n_quad_points, num_grid):
     if choice == 0:
         # Probability of choosing work in t+1
         choice_prob = np.full(n_quad_points * num_grid, 0.00)
     else:
         choice_prob = choice_probs_worker(value, lambda_)
     return choice_prob
+
+
+def next_period_consumption(policy, period, wealth):
+    cons = np.empty((2, wealth.shape[0] * wealth.shape[1]))
+    cons_0 = np.interp(wealth, policy[period + 1][0].T[0], policy[period + 1][0].T[1])
+    # extrapolate linearly right of max grid point
+    slope = (policy[period + 1][0].T[1][-2] - policy[period + 1][0].T[1][-1]) / (
+        policy[period + 1][0].T[0][-2] - policy[period + 1][0].T[0][-1]
+    )
+    intercept = policy[period + 1][0].T[1][-1] - policy[period + 1][0].T[0][-1] * slope
+    cons_0[cons_0 == np.max(policy[period + 1][0].T[1])] = (
+        intercept + slope * wealth[cons_0 == np.max(policy[period + 1][0].T[1])]
+    )
+    cons[0, :] = cons_0.flatten("F")
+
+    cons_1 = np.interp(wealth, policy[period + 1][1].T[0], policy[period + 1][1].T[1])
+    # extrapolate linearly right of max grid point
+    slope = (policy[period + 1][1].T[1][-2] - policy[period + 1][1].T[1][-1]) / (
+        policy[period + 1][1].T[0][-2] - policy[period + 1][1].T[0][-1]
+    )
+    intercept = policy[period + 1][1].T[1][-1] - policy[period + 1][1].T[0][-1] * slope
+    cons_1[cons_1 == np.max(policy[period + 1][1].T[1])] = (
+        intercept + slope * wealth[cons_1 == np.max(policy[period + 1][1].T[1])]
+    )
+    cons[1, :] = cons_1.flatten("F")
+    return cons
