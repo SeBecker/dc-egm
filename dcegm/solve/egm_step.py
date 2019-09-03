@@ -45,11 +45,21 @@ def egm_step(
     wealth_t1[wealth_t1 < cons_floor] = cons_floor  # Replace with retirement saftey net
     # Value function
     value_t1 = next_period_value(
-        wealth_t1, num_grid, cost_work, n_quad_points, period, num_periods, theta, beta
+        value,
+        wealth_t1,
+        num_grid,
+        cost_work,
+        n_quad_points,
+        period,
+        num_periods,
+        theta,
+        beta,
     )
     # TODO: Extract calculation of probabilities
     # Probability of choosing work in t+1
-    choice_prob_t1 = calc_choice_probs(choice, value, lambda_, n_quad_points, num_grid)
+    choice_prob_t1 = calc_choice_probs(
+        choice, value_t1, lambda_, n_quad_points, num_grid
+    )
 
     # TODO: Extract consumption and produce one array with one dimension for choice
     # Next period consumption based on interpolation and extrapolation
@@ -118,20 +128,20 @@ def egm_step(
 
 
 def next_period_value(
-    wealth, num_grid, cost_work, n_quad_points, period, num_periods, theta, beta
+    value, wealth, num_grid, cost_work, n_quad_points, period, num_periods, theta, beta
 ):
-    value = np.full((2, num_grid * n_quad_points), np.nan)
+    value_t1 = np.full((2, num_grid * n_quad_points), np.nan)
     if period + 1 == num_periods - 1:
-        value[0, :] = util(wealth, 0, theta, cost_work).flatten("F")
-        value[1, :] = util(wealth, 1, theta, cost_work).flatten("F")
+        value_t1[0, :] = util(wealth, 0, theta, cost_work).flatten("F")
+        value_t1[1, :] = util(wealth, 1, theta, cost_work).flatten("F")
     else:
-        value[1, :] = value_function(
+        value_t1[1, :] = value_function(
             1, period + 1, wealth, value, beta, theta, cost_work
         )  # value function in t+1 if choice in t+1 is work
-        value[0, :] = value_function(
+        value_t1[0, :] = value_function(
             0, period + 1, wealth, value, beta, theta, cost_work
         )
-    return value
+    return value_t1
 
 
 def calc_choice_probs(choice, value, lambda_, n_quad_points, num_grid):
