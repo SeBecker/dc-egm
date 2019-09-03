@@ -3,9 +3,9 @@ import numpy as np
 import scipy.stats as scps
 from scipy.special.orthogonal import ps_roots
 
+from dcegm.solve.egm_step import egm_step
+from dcegm.solve.secondary_envelope import secondary_envelope_wrapper
 from dcegm.solve.solve_auxiliary import create_container
-from dcegm.solve.solve_auxiliary import egm_step
-from dcegm.solve.solve_auxiliary import secondary_envelope_wrapper
 
 
 def solve_retirement_model(
