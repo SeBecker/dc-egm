@@ -47,20 +47,11 @@ def egm_step(
     value_t1 = next_period_value(
         value, wealth_t1, cost_work, period, num_periods, theta, beta
     )
-    # Probability of choosing work in t+1
-    choice_prob_t1 = next_period_choice_probs(
-        choice, value_t1, lambda_, n_quad_points, num_grid
-    )
 
-    # Next period consumption based on interpolation and extrapolation
-    # given grid points and associated consumption
-    cons_t1 = next_period_consumption(policy, period, wealth_t1)
-
-    # TODO: Extract function for marginal utility
     # Marginal utility of expected consumption next period
-    marg_ut_t1 = choice_prob_t1 * mutil(cons_t1[1, :], theta) + (
-        1 - choice_prob_t1
-    ) * mutil(cons_t1[0, :], theta)
+    marg_ut_t1 = next_period_marg_ut(
+        choice, value_t1, wealth_t1, lambda_, policy, period, theta
+    )
 
     # Marginal budget
     # Note: Constant for this model formulation (1+r)
@@ -141,3 +132,18 @@ def next_period_consumption(policy, period, wealth):
     )
     cons[1, :] = cons_1.flatten("F")
     return cons
+
+
+def next_period_marg_ut(choice, value_t1, wealth_t1, lambda_, policy, period, theta):
+    num_grid, n_quad_points = wealth_t1.shape
+    # Probability of choosing work in t+1
+    choice_prob_t1 = next_period_choice_probs(
+        choice, value_t1, lambda_, n_quad_points, num_grid
+    )
+
+    # Next period consumption based on interpolation and extrapolation
+    # given grid points and associated consumption
+    cons_t1 = next_period_consumption(policy, period, wealth_t1)
+    return choice_prob_t1 * mutil(cons_t1[1, :], theta) + (1 - choice_prob_t1) * mutil(
+        cons_t1[0, :], theta
+    )

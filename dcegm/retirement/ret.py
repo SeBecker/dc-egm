@@ -38,7 +38,7 @@ def income(it, shock, coeffs_age_poly):
     return w
 
 
-def budget(it, savings, shocks, working, ngridm, n_quad_points, r, coeffs_age_poly):
+def budget(it, savings, shocks, working, num_grid, n_quad_points, r, coeffs_age_poly):
     """Wealth, M_{t+1} in period t+1, where it == t
 
     Arguments
@@ -53,8 +53,8 @@ def budget(it, savings, shocks, working, ngridm, n_quad_points, r, coeffs_age_po
     """
 
     w1 = np.full(
-        (ngridm, n_quad_points), income(it + 1, shocks, coeffs_age_poly) * working
-    ).T + np.full((n_quad_points, ngridm), savings * (1 + r))
+        (num_grid, n_quad_points), income(it + 1, shocks, coeffs_age_poly) * working
+    ).T + np.full((n_quad_points, num_grid), savings * (1 + r))
 
     return w1
 
