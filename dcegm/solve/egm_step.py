@@ -1,7 +1,7 @@
 import numpy as np
 
 from dcegm.retirement.ret import budget
-from dcegm.retirement.ret import choice_probabilities
+from dcegm.retirement.ret import choice_probs_worker
 from dcegm.retirement.ret import imutil
 from dcegm.retirement.ret import logsum
 from dcegm.retirement.ret import mbudget
@@ -24,7 +24,7 @@ def egm_step(
     interest,
     coeffs_age_poly,
     theta,
-    duw,
+    cost_work,
     beta,
     lambda_,
     sigma,
@@ -43,27 +43,13 @@ def egm_step(
     )
 
     wealth_t1[wealth_t1 < cons_floor] = cons_floor  # Replace with retirement saftey net
-    # TODO: Extract calculation of value function
     # Value function
-    value_t1 = np.full((2, num_grid * n_quad_points), np.nan)
-    if period + 1 == num_periods - 1:
-        value_t1[0, :] = util(wealth_t1, 0, theta, duw).flatten("F")
-        value_t1[1, :] = util(wealth_t1, 1, theta, duw).flatten("F")
-    else:
-        value_t1[1, :] = value_function(
-            1, period + 1, wealth_t1, value, beta, theta, duw
-        )  # value function in t+1 if choice in t+1 is work
-        value_t1[0, :] = value_function(
-            0, period + 1, wealth_t1, value, beta, theta, duw
-        )
-
+    value_t1 = next_period_value(
+        wealth_t1, num_grid, cost_work, n_quad_points, period, num_periods, theta, beta
+    )
     # TODO: Extract calculation of probabilities
     # Probability of choosing work in t+1
-    if choice == 0:
-        # Probability of choosing work in t+1
-        choice_prob_t1 = np.full(n_quad_points * num_grid, 0.00)
-    else:
-        choice_prob_t1 = choice_probabilities(value_t1, lambda_)
+    choice_prob_t1 = calc_choice_probs(choice, value, lambda_, n_quad_points, num_grid)
 
     # TODO: Extract consumption and produce one array with one dimension for choice
     # Next period consumption based on interpolation and extrapolation
@@ -123,9 +109,35 @@ def egm_step(
     else:
         ev = np.dot(quadw.T, value_t1[0, :].reshape(wealth_t1.shape, order="F"))
 
-    value[period][choice][1:, 1] = util(cons_t0, choice, theta, duw) + beta * ev
+    value[period][choice][1:, 1] = util(cons_t0, choice, theta, cost_work) + beta * ev
     value[period][choice][1:, 0] = savingsgrid + cons_t0
     value[period][choice][0, 1] = ev[0]
 
     # Why is ev returned without?
     return value, policy, ev
+
+
+def next_period_value(
+    wealth, num_grid, cost_work, n_quad_points, period, num_periods, theta, beta
+):
+    value = np.full((2, num_grid * n_quad_points), np.nan)
+    if period + 1 == num_periods - 1:
+        value[0, :] = util(wealth, 0, theta, cost_work).flatten("F")
+        value[1, :] = util(wealth, 1, theta, cost_work).flatten("F")
+    else:
+        value[1, :] = value_function(
+            1, period + 1, wealth, value, beta, theta, cost_work
+        )  # value function in t+1 if choice in t+1 is work
+        value[0, :] = value_function(
+            0, period + 1, wealth, value, beta, theta, cost_work
+        )
+    return value
+
+
+def calc_choice_probs(choice, value, lambda_, n_quad_points, num_grid):
+    if choice == 0:
+        # Probability of choosing work in t+1
+        choice_prob = np.full(n_quad_points * num_grid, 0.00)
+    else:
+        choice_prob = choice_probs_worker(value, lambda_)
+    return choice_prob
