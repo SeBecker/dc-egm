@@ -25,10 +25,8 @@ def solve_retirement_model(
     # Initialize grids
     quadstnorm = scps.norm.ppf(ps_roots(n_quad_points)[0])
     quadw = ps_roots(n_quad_points)[1]
-
     # define savingsgrid
     savingsgrid = np.linspace(0, mmax, num_grid)
-
     # Set up list containers
     policy, value = create_container(
         num_grid, num_periods, savingsgrid, theta, cost_work

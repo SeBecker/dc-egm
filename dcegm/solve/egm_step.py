@@ -41,7 +41,6 @@ def egm_step(
         interest,
         coeffs_age_poly,
     )
-
     wealth_t1[wealth_t1 < cons_floor] = cons_floor  # Replace with retirement saftey net
     # TODO: Extract calculation of value function
     # Value function
@@ -75,6 +74,7 @@ def egm_step(
     slope = (policy[period + 1][0].T[1][-2] - policy[period + 1][0].T[1][-1]) / (
         policy[period + 1][0].T[0][-2] - policy[period + 1][0].T[0][-1]
     )
+
     intercept = policy[period + 1][0].T[1][-1] - policy[period + 1][0].T[0][-1] * slope
     cons10[cons10 == np.max(policy[period + 1][0].T[1])] = (
         intercept + slope * wealth_t1[cons10 == np.max(policy[period + 1][0].T[1])]
@@ -93,17 +93,14 @@ def egm_step(
         intercept + slope * wealth_t1[cons11 == np.max(policy[period + 1][1].T[1])]
     )
     cons11_flat = cons11.flatten("F")
-
     # TODO: Extract function for marginal utility
     # Marginal utility of expected consumption next period
     marg_ut_t1 = choice_prob_t1 * mutil(cons11_flat, theta) + (
         1 - choice_prob_t1
     ) * mutil(cons10_flat, theta)
-
     # Marginal budget
     # Note: Constant for this model formulation (1+r)
     marg_bud_t1 = mbudget(num_grid, n_quad_points, interest)
-
     # RHS of Euler eq., p 337, integrate out error of y
     rhs_eul = np.dot(
         quadw.T,

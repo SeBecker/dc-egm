@@ -5,7 +5,6 @@ import scipy.interpolate as scin
 
 def util(consumption, working, theta, duw):
     """CRRA utility"""
-
     u = (consumption ** (1 - theta) - 1) / (1 - theta)
     u = u - duw * (working)
 
@@ -34,7 +33,6 @@ def income(it, shock, coeffs_age_poly):
 
     ages = (it + 20) ** np.arange(len(coeffs_age_poly))
     w = np.exp(coeffs_age_poly @ ages + shock)
-
     return w
 
 
@@ -51,7 +49,6 @@ def budget(it, savings, shocks, working, ngridm, n_quad_points, r, coeffs_age_po
         w1: matrix with dimension (expn, ngridm) of all possible
     next period wealths
     """
-
     w1 = np.full(
         (ngridm, n_quad_points), income(it + 1, shocks, coeffs_age_poly) * working
     ).T + np.full((n_quad_points, ngridm), savings * (1 + r))
@@ -70,7 +67,6 @@ def mbudget(ngridm, n_quad_points, r):
 
 def value_function(working, it, x, value, beta, theta, duw):
     x = x.flatten("F")
-
     res = np.full(x.shape, np.nan)
     # Mark constrained region
     # credit constraint between 1st (M_{t+1) = 0) and second point (A_{t+1} = 0)
@@ -101,7 +97,6 @@ def choice_probabilities(x, lambda_):
     mx = np.amax(x, axis=0)
     mxx = x - mx
     res = np.exp(mxx[1, :] / lambda_) / np.sum(np.exp(mxx / lambda_), axis=0)
-
     return res
 
 
@@ -112,5 +107,4 @@ def logsum(x, lambda_):
     mx = np.amax(x, axis=0)
     mxx = x - mx
     res = mx + lambda_ * np.log(np.sum(np.exp(mxx / lambda_), axis=0))
-
     return res
