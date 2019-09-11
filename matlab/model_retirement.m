@@ -1,8 +1,8 @@
 % Matlab class to implement a simple retirement model with consumption and savings,
 % income shocks and credit constraint
 % Written by Fedor Iskhakov, Australian National University, 2016
-% See Iskhakov, Jorgensen, Rust and Schjerning 
-% "The Endogenous Grid Method for Discrete-Continuous Dynamic Choice Models 
+% See Iskhakov, Jorgensen, Rust and Schjerning
+% "The Endogenous Grid Method for Discrete-Continuous Dynamic Choice Models
 %  with (or without) Taste Shocks" (QE, 2017)
 
 classdef model_retirement < handle
@@ -11,7 +11,7 @@ classdef model_retirement < handle
 properties (Access=public)
 	%Default parameters of the model
 	label		= 'Consumption model with retirement'; %name of this model
-	Tbar		= 25			; %number of periods (fist period is t=1) 
+	Tbar		= 25			; %number of periods (fist period is t=1)
 	ngridm	= 500		; %number of grid points over assets
 	mmax		= 50		; %maximum level of assets
 	expn		=	5 		; %number of quadrature points used in calculation of expectations
@@ -26,7 +26,7 @@ properties (Access=public)
 	inc1		= 0.04  ; %income equation: age coef
 	inc2		= 0.0002;	%income equation: age^2 coef
 	cfloor  =	0.001	; %consumption floor (safety net in retirement)
-	lambda  = 0.02  ; %scale of the EV taste shocks 
+	lambda  = 0.02  ; %scale of the EV taste shocks
 end %properties
 
 properties (SetAccess=private, GetAccess=public)
@@ -68,7 +68,7 @@ methods (Access=public)
 		age=it+19;
 		w=exp(me.inc0 + me.inc1*age - me.inc2*age.*age + shock);
 	end %income
-	function w1=budget(me,it,savings,shocks,working) 
+	function w1=budget(me,it,savings,shocks,working)
 		%wealth in period t+1, where it=t
 		%inputs: savings = 1x(ngridm) row vector of savings
 		%				 shocks = (expn)x1 column vector of shocks
@@ -76,7 +76,7 @@ methods (Access=public)
 		w1=ones(size(shocks,1),1)*savings(1,:)*(1+me.r)+ ...
 			 (working==1)*income(me,it+1,shocks(:,1))*ones(1,size(savings,2));
 	end %budget
-	function mw1=mbudget(me,it,savings,shocks,working) 
+	function mw1=mbudget(me,it,savings,shocks,working)
 		%derivative of wealth in t+1 w.r.t. savings
 		%inputs and outputs as above
 		mw1=repmat(1+me.r,size(shocks,1),size(savings,2));
@@ -238,7 +238,7 @@ methods (Access=public)
 	function sim(me,seed)
 		%simulate from the model
 		%input: init = initial wealth
-		%			  seed = seed for random number generator 
+		%			  seed = seed for random number generator
 		%							(to run identical or varying simulations)
 		if me.policy(1).len<1
 			error 'The model should be solved first'
@@ -454,4 +454,3 @@ methods (Access=private)
 	end
 end
 end %of classdef
-

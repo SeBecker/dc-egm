@@ -91,7 +91,7 @@ def test2():
     r = 0.05
 
     # Discount factor
-    beta = 1/(1+r)
+    beta = 1 / (1 + r)
 
     # Standard deviation of log-normally distributed income shocks
     sigma = 0.35

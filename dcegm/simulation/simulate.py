@@ -3,7 +3,9 @@ import numpy as np
 import pandas as pd
 from scipy.stats import norm
 
-from dcegm.retirement.ret import choice_probabilities, value_function, income
+from dcegm.retirement.ret import choice_probabilities
+from dcegm.retirement.ret import income
+from dcegm.retirement.ret import value_function
 
 
 def simulate(
@@ -25,70 +27,18 @@ def simulate(
     # Set seed
     np.random.seed(seed)
 
-    wealth0, wealth1, consumption, shock, income_, worker, prob_work, retirement_age, vl1, working = fill_period0(
-        value, init, num_periods, policy, num_sims, beta, theta, lambda_, cost_work
-    )
-
-    # Record current period choice
-    for period in range(1, num_periods - 1):
-        worker[:, period] = working
-        # Shock, here no shock since set sigma = 0 for m0
-        shock[:, period][worker[:, period] == 1] = (
-            norm.ppf(np.random.uniform(0, 1, sum(working))) * sigma
-        )
-
-        # Fill in retirement age
-        retirement_age[(worker[:, period - 1] == 1) & (worker[:, period] == 0)] = period
-
-        wealth0, wealth1, consumption, prob_work, working, shock = sim_periods(
-            wealth0,
-            wealth1,
-            consumption,
-            worker,
-            num_sims,
-            prob_work,
-            shock,
-            period,
-            coeffs_age_poly,
-            lambda_,
-            income_,
-            value,
-            policy,
-            beta,
-            theta,
-            cost_work,
-            r,
-        )
-    df = create_dataframe(
-        wealth0,
-        wealth1,
-        consumption,
-        worker,
-        income_,
-        shock,
-        retirement_age,
-        num_sims,
-        num_periods,
-    )
-
-    return df
-
-
-def fill_period0(
-    value, init, num_periods, policy, num_sims, beta, theta, lambda_, cost_work
-):
-    """This function creates the necessary containers and fills the container for period t=0."""
     # Create containers
-
     wealth0 = np.full((num_sims, num_periods), np.nan)
     wealth1 = np.full((num_sims, num_periods), np.nan)
-    consumption = np.full((num_sims, num_periods), np.nan)
+    cons = np.full((num_sims, num_periods), np.nan)
     shock = np.full((num_sims, num_periods), np.nan)
     income_ = np.full((num_sims, num_periods), np.nan)
     worker = np.full((num_sims, num_periods), np.nan)
     prob_work = np.full((num_sims, num_periods), np.nan)
-    retirement_age = np.full((num_sims, 1), np.nan)
+    ret_age = np.full((num_sims, 1), np.nan)
     vl1 = np.full((2, num_sims), np.nan)
+
+    # Set initial t=0 values
 
     # Draw inperiodial wealth
     wealth0[:, 0] = init[0] + np.random.uniform(0, 1, num_sims) * (init[1] - init[0])
@@ -111,28 +61,51 @@ def fill_period0(
 
     working = (prob_work[:, 0] > np.random.uniform(0, 1, num_sims)).astype(int)
 
-    consumption[:, 0][working == 0], consumption[:, 0][working == 1] = consumption_t0(
+    cons[:, 0][working == 0], cons[:, 0][working == 1] = cons_t0(
         wealth0, policy, working
     )
 
-    wealth1[:, 0] = wealth0[:, 0] - consumption[:, 0]
+    wealth1[:, 0] = wealth0[:, 0] - cons[:, 0]
 
-    return (
-        wealth0,
-        wealth1,
-        consumption,
-        shock,
-        income_,
-        worker,
-        prob_work,
-        retirement_age,
-        vl1,
-        working,
+    # Record current period choice
+    for period in range(1, num_periods - 1):
+        worker[:, period] = working
+        # Shock, here no shock since set sigma = 0 for m0
+        shock[:, period][worker[:, period] == 1] = (
+            norm.ppf(np.random.uniform(0, 1, sum(working))) * sigma
+        )
+
+        # Fill in retirement age
+        ret_age[(worker[:, period - 1] == 1) & (worker[:, period] == 0)] = period
+
+        wealth0, wealth1, cons, prob_work, working, shock = sim_periods(
+            wealth0,
+            wealth1,
+            cons,
+            worker,
+            num_sims,
+            prob_work,
+            shock,
+            period,
+            coeffs_age_poly,
+            lambda_,
+            income_,
+            value,
+            policy,
+            beta,
+            theta,
+            cost_work,
+            r,
+        )
+    df = create_dataframe(
+        wealth0, wealth1, cons, worker, income_, shock, ret_age, num_sims, num_periods
     )
 
+    return df
 
-def consumption_t0(wealth0, policy, working):
-    """This function calculates the consumption in period 0"""
+
+def cons_t0(wealth0, policy, working):
+    """This function calculates the cons in period 0"""
     cons10 = np.interp(wealth0[:, 0], policy[1][0].T[0], policy[1][0].T[1])
     # extrapolate linearly right of max grid point
     slope = (policy[1][0].T[1][-2] - policy[1][0].T[1][-1]) / (
@@ -161,7 +134,7 @@ def consumption_t0(wealth0, policy, working):
 def sim_periods(
     wealth0,
     wealth1,
-    consumption,
+    cons,
     worker,
     num_sims,
     prob_work,
@@ -208,7 +181,7 @@ def sim_periods(
     # retirement is absorbing state
     working[worker[:, period] == 0] = 0.0
 
-    # Calculate current period consumption
+    # Calculate current period cons
 
     cons10 = np.interp(
         wealth0[:, period], policy[period + 1][0].T[0], policy[period + 1][0].T[1]
@@ -238,26 +211,20 @@ def sim_periods(
     )
     cons11_flat = cons11.flatten("F")
 
-    consumption[:, period][working == 1] = cons11_flat[working == 1]
-    consumption[:, period][working == 0] = cons10_flat[working == 0]
+    cons[:, period][working == 1] = cons11_flat[working == 1]
+    cons[:, period][working == 0] = cons10_flat[working == 0]
 
-    wealth1[:, period] = wealth0[:, period] - consumption[:, period]
+    wealth1[:, period] = wealth0[:, period] - cons[:, period]
 
-    return wealth0, wealth1, consumption, prob_work, working, shock
+    return wealth0, wealth1, cons, prob_work, working, shock
 
 
 def create_dataframe(
-    wealth0,
-    wealth1,
-    consumption,
-    worker,
-    income_,
-    shock,
-    retirement_age,
-    num_sims,
-    num_periods,
+    wealth0, wealth1, cons, worker, income_, shock, ret_age, num_sims, num_periods
 ):
-    """This function processes the results so that they are composed in a pandas dataframe object"""
+    """This function processes the results so that they are composed in a pandas
+    dataframe object.
+    """
 
     # Set up multiindex object
     index = pd.MultiIndex.from_product(
@@ -280,10 +247,10 @@ def create_dataframe(
         [
             wealth0.flatten("C"),
             wealth1.flatten("C"),
-            consumption.flatten("C"),
+            cons.flatten("C"),
             worker.flatten("C"),
             income_.flatten("C"),
-            retirement_age.repeat(num_periods).flatten("C"),
+            ret_age.repeat(num_periods).flatten("C"),
             shock.flatten("C"),
         ]
     )
