@@ -36,7 +36,7 @@ def income(it, shock, coeffs_age_poly):
     return w
 
 
-def budget(it, savings, shocks, working, ngridm, n_quad_points, r, coeffs_age_poly):
+def budget(it, savings, shocks, working, num_grid, n_quad_points, r, coeffs_age_poly):
     """Wealth, M_{t+1} in period t+1, where it == t
 
     Arguments
@@ -50,8 +50,8 @@ def budget(it, savings, shocks, working, ngridm, n_quad_points, r, coeffs_age_po
     next period wealths
     """
     w1 = np.full(
-        (ngridm, n_quad_points), income(it + 1, shocks, coeffs_age_poly) * working
-    ).T + np.full((n_quad_points, ngridm), savings * (1 + r))
+        (num_grid, n_quad_points), income(it + 1, shocks, coeffs_age_poly) * working
+    ).T + np.full((n_quad_points, num_grid), savings * (1 + r))
 
     return w1
 
@@ -90,7 +90,7 @@ def value_function(working, it, x, value, beta, theta, duw):
 
 
 # Calculation of probability to choose work, if a worker today
-def choice_probabilities(x, lambda_):
+def choice_probs_worker(x, lambda_):
     """Calculate the probability of choosing work in t+1
     for state worker given t+1 value functions"""
 
